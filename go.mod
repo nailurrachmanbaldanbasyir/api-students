@@ -5,6 +5,7 @@ go 1.27.0
 require (
 	github.com/gofiber/fiber/v2 v2.52.15
 	github.com/jackc/pgx/v5 v5.10.0
+	github.com/joho/godotenv v1.5.1
 )
 
 require (
