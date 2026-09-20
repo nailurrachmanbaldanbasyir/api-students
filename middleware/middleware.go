@@ -7,15 +7,30 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/cors"
+	"github.com/gofiber/fiber/v2/middleware/helmet"
 	"github.com/gofiber/fiber/v2/middleware/recover"
 	"github.com/google/uuid"
 )
 
-func Register(app *fiber.App, logger *log.Logger) {
+func Register(app *fiber.App, logger *log.Logger, allowedOrigins string) {
 	app.Use(RequestID())
 	app.Use(recover.New())
+	app.Use(helmet.New())
+	app.Use(corsPolicy(allowedOrigins))
 	app.Use(RequestLogger(logger))
 	app.Use(RequireJSON())
+}
+
+func corsPolicy(allowedOrigins string) fiber.Handler {
+	if strings.TrimSpace(allowedOrigins) == "" {
+		allowedOrigins = "http://localhost:5173"
+	}
+	return cors.New(cors.Config{
+		AllowOrigins: allowedOrigins,
+		AllowMethods: "GET,POST,PUT,PATCH,DELETE,OPTIONS",
+		AllowHeaders: "Origin,Content-Type,Accept,Authorization,X-Request-ID",
+	})
 }
 
 func RequestID() fiber.Handler {
