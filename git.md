@@ -31,10 +31,13 @@ feat-5.7  chore(config): validasi JWT_SECRET >=32 char, wiring main.go
 docs-5.8  docs: tambah panduan.md & git.md modul 5
 ```
 
-Perintah contoh per commit:
+> Prinsip: **1 commit = 1 fitur = beberapa file sekaligus**, bukan 1 file 1 commit.
+> Jadi tetap bertahap (8 commit) tapi setiap commit membatch file-file yang saling terkait.
+
+Perintah contoh per commit (batch file sekaligus):
 
 ```bash
-# 5.1 — migrasi & model & env
+# 5.1 — migrasi & model & env  (3 file sekaligus)
 git add migrations/002_auth.sql app/model/user.go app/model/auth.go .env.example
 git commit -m "feat(auth): tambah migrasi 002, model user & env JWT
 
@@ -43,7 +46,7 @@ git commit -m "feat(auth): tambah migrasi 002, model user & env JWT
 - .env.example: JWT_SECRET/ISSUER/TTL/ALLOWED_ORIGINS
 - alasan: siapkan skema auth sebelum logic (Langkah 1-2 modul)"
 
-# 5.2 — helper security & jwt
+# 5.2 — helper security & jwt  (6 file sekaligus)
 git add helper/security.go helper/jwt.go helper/context.go helper/response.go go.mod go.sum
 git commit -m "feat(security): implementasi hashing bcrypt, random token & JWT manager
 
@@ -54,7 +57,7 @@ git commit -m "feat(security): implementasi hashing bcrypt, random token & JWT m
 - deps: golang-jwt/jwt v5, x/crypto
 - tutup: secret lemah, algorithm confusion, timing attack"
 
-# 5.3 — repository
+# 5.3 — repository  (2 file sekaligus)
 git add app/repository/user_repository.go app/repository/token_repository.go
 git commit -m "feat(auth): tambah repository user & refresh_token
 
@@ -62,7 +65,7 @@ git commit -m "feat(auth): tambah repository user & refresh_token
 - token_repository.go: Save, FindActive (revoked_at IS NULL & expires_at > NOW()), Revoke, RevokeAllForUser
 - query aman di DB, bukan di Go"
 
-# 5.4 — business rules & service + test
+# 5.4 — business rules & service + test  (3 file sekaligus)
 git add app/service/auth_rules.go app/service/auth_service.go app/service/auth_rules_test.go
 git commit -m "feat(auth): business rules & service register/login/refresh/logout/me + unit test
 
@@ -71,7 +74,7 @@ git commit -m "feat(auth): business rules & service register/login/refresh/logou
 - auth_rules_test.go: 6 test (password lemah/umum/minimal/huruf-angka, login kosong, username)
 - go test ./... -> 9 PASS"
 
-# 5.5 — middleware & config hardening
+# 5.5 — middleware & config hardening  (4 file sekaligus)
 git add middleware/auth.go middleware/middleware.go config/app.go config/env.go
 git commit -m "feat(middleware): RequireAuth, rate limiter, helmet & CORS policy + BodyLimit
 
@@ -97,13 +100,16 @@ git commit -m "chore(config): validasi JWT_SECRET >=32 char, wiring main.go
 - main.go: LoadEnv, cek len(JWT_SECRET) <32 -> os.Exit(1), init JWTManager, User/Token/Student repo, AuthService, NewApp dengan Dependencies
 - pastikan secret tidak default & tidak bocor ke repo"
 
-# 5.8 — docs
+# 5.8 — docs  (3 file sekaligus)
 git add panduan.md git.md .gitignore
 git commit -m "docs: tambah panduan.md & git.md modul 5
 
 - panduan.md: daftar file baru/ubah, screening temuan S-01..S-20, cara jalan & uji keamanan
 - git.md: riwayat commit bertahap (file ini)
 - .gitignore: normalisasi LF"
+
+# Setelah semua 8 commit bertahap selesai, push sekali ke remote
+git push origin main
 ```
 
 ---
@@ -143,14 +149,29 @@ be46d8f refactor: finalize clean architecture structure
 
 ---
 
-## Verifikasi cepat sebelum push
+## Verifikasi cepat sebelum push & Push ke remote
 
 ```bash
 go vet ./...
 go test ./... -v
-git status
+git status                          # harus clean (nothing to commit)
 git diff --stat
-git log --oneline -10
+git log --oneline -10               # harus 8 commit baru di atas be46d8f
 # pastikan .env tidak muncul di git status (sudah di .gitignore)
-git push origin main
+git push origin main                # push semua commit bertahap sekaligus
 ```
+
+> Jika `git push` ditolak (remote ahead), lakukan `git pull --rebase origin main` dulu lalu `git push origin main` lagi.
+> Jangan `git push --force` kecuali diminta dosen.
+
+## Bukti push berhasil
+
+Setelah push, `git status` akan:
+
+```
+On branch main
+Your branch is up to date with 'origin/main'.
+nothing to commit, working tree clean
+```
+
+Dan `git log --oneline -10` di GitHub akan sama dengan lokal.
