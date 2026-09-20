@@ -64,7 +64,7 @@ func listStudents(repo *repository.StudentRepository) fiber.Handler {
 	}
 }
 
-func getStudent(repo *repository.StudentRepository) fiber.Handler {
+func getStudent(repo *repository.StudentRepository, perms *helper.PermissionSet) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		id, valid := paramID(c)
 
@@ -94,6 +94,23 @@ func getStudent(repo *repository.StudentRepository) fiber.Handler {
 			)
 		}
 
+		current, ok := helper.CurrentUser(c)
+		if !ok {
+			return helper.Fail(
+				c,
+				fiber.StatusUnauthorized,
+				"belum terautentikasi",
+			)
+		}
+
+		if !service.CanAccessStudent(current, student.OwnerID, perms, "student:read:any") {
+			return helper.Fail(
+				c,
+				fiber.StatusForbidden,
+				"tidak memiliki hak mengakses student ini",
+			)
+		}
+
 		return helper.OK(
 			c,
 			"student ditemukan",
@@ -110,7 +127,7 @@ func createStudent(repo *repository.StudentRepository) fiber.Handler {
 			return helper.Fail(
 				c,
 				fiber.StatusBadRequest,
-				"JSON tidak valid",
+				"json tidak valid",
 			)
 		}
 
@@ -119,11 +136,21 @@ func createStudent(repo *repository.StudentRepository) fiber.Handler {
 			return helper.FailValidation(c, validationErrors)
 		}
 
+		current, ok := helper.CurrentUser(c)
+		if !ok {
+			return helper.Fail(
+				c,
+				fiber.StatusUnauthorized,
+				"belum terautentikasi",
+			)
+		}
+
 		student := model.Student{
 			NIM:      strings.TrimSpace(req.NIM),
 			Name:     strings.TrimSpace(req.Name),
 			Grade:    req.Grade,
 			IsActive: req.IsActive,
+			OwnerID:  current.UserID,
 		}
 
 		result, err := repo.Create(c.Context(), student)
@@ -132,7 +159,7 @@ func createStudent(repo *repository.StudentRepository) fiber.Handler {
 			return helper.Fail(
 				c,
 				fiber.StatusConflict,
-				"NIM sudah digunakan",
+				"nim sudah digunakan",
 			)
 		}
 
@@ -153,7 +180,7 @@ func createStudent(repo *repository.StudentRepository) fiber.Handler {
 	}
 }
 
-func replaceStudent(repo *repository.StudentRepository) fiber.Handler {
+func replaceStudent(repo *repository.StudentRepository, perms *helper.PermissionSet) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		id, valid := paramID(c)
 
@@ -165,13 +192,48 @@ func replaceStudent(repo *repository.StudentRepository) fiber.Handler {
 			)
 		}
 
+		current, ok := helper.CurrentUser(c)
+		if !ok {
+			return helper.Fail(
+				c,
+				fiber.StatusUnauthorized,
+				"belum terautentikasi",
+			)
+		}
+
+		existing, err := repo.GetByID(c.Context(), id)
+
+		if errors.Is(err, repository.ErrNotFound) {
+			return helper.Fail(
+				c,
+				fiber.StatusNotFound,
+				"student tidak ditemukan",
+			)
+		}
+
+		if err != nil {
+			return helper.Fail(
+				c,
+				fiber.StatusInternalServerError,
+				"gagal mengambil student",
+			)
+		}
+
+		if !service.CanAccessStudent(current, existing.OwnerID, perms, "student:update:any") {
+			return helper.Fail(
+				c,
+				fiber.StatusForbidden,
+				"tidak memiliki hak mengubah student ini",
+			)
+		}
+
 		var req model.ReplaceStudentRequest
 
 		if err := c.BodyParser(&req); err != nil {
 			return helper.Fail(
 				c,
 				fiber.StatusBadRequest,
-				"JSON tidak valid",
+				"json tidak valid",
 			)
 		}
 
@@ -201,7 +263,7 @@ func replaceStudent(repo *repository.StudentRepository) fiber.Handler {
 			return helper.Fail(
 				c,
 				fiber.StatusConflict,
-				"NIM sudah digunakan",
+				"nim sudah digunakan",
 			)
 		}
 
@@ -221,7 +283,7 @@ func replaceStudent(repo *repository.StudentRepository) fiber.Handler {
 	}
 }
 
-func patchStudent(repo *repository.StudentRepository) fiber.Handler {
+func patchStudent(repo *repository.StudentRepository, perms *helper.PermissionSet) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		id, valid := paramID(c)
 
@@ -233,13 +295,48 @@ func patchStudent(repo *repository.StudentRepository) fiber.Handler {
 			)
 		}
 
+		current, ok := helper.CurrentUser(c)
+		if !ok {
+			return helper.Fail(
+				c,
+				fiber.StatusUnauthorized,
+				"belum terautentikasi",
+			)
+		}
+
+		existing, err := repo.GetByID(c.Context(), id)
+
+		if errors.Is(err, repository.ErrNotFound) {
+			return helper.Fail(
+				c,
+				fiber.StatusNotFound,
+				"student tidak ditemukan",
+			)
+		}
+
+		if err != nil {
+			return helper.Fail(
+				c,
+				fiber.StatusInternalServerError,
+				"gagal mengambil student",
+			)
+		}
+
+		if !service.CanAccessStudent(current, existing.OwnerID, perms, "student:update:any") {
+			return helper.Fail(
+				c,
+				fiber.StatusForbidden,
+				"tidak memiliki hak mengubah student ini",
+			)
+		}
+
 		var req model.PatchStudentRequest
 
 		if err := c.BodyParser(&req); err != nil {
 			return helper.Fail(
 				c,
 				fiber.StatusBadRequest,
-				"JSON tidak valid",
+				"json tidak valid",
 			)
 		}
 
@@ -263,7 +360,7 @@ func patchStudent(repo *repository.StudentRepository) fiber.Handler {
 			return helper.Fail(
 				c,
 				fiber.StatusConflict,
-				"NIM sudah digunakan",
+				"nim sudah digunakan",
 			)
 		}
 

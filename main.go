@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"log/slog"
 	"os"
@@ -49,13 +50,24 @@ func main() {
 
 	userRepo := repository.NewUserRepository(db)
 	tokenRepo := repository.NewTokenRepository(db)
+	roleRepo := repository.NewRoleRepository(db)
 	studentRepo := repository.NewStudentRepository(db)
 
-	authService := service.NewAuthService(userRepo, tokenRepo, jwtManager, refreshTTL)
+	rawPermissions, err := roleRepo.LoadPermissions(context.Background())
+	if err != nil {
+		logger.Printf("gagal memuat permission: %v", err)
+		os.Exit(1)
+	}
+
+	permissions := helper.NewPermissionSet(rawPermissions)
+	logger.Printf("permission dimuat, roles=%v", permissions.KnownRoles())
+
+	authService := service.NewAuthService(userRepo, tokenRepo, jwtManager, permissions, refreshTTL)
 
 	app := config.NewApp(logger, db, route.Dependencies{
 		Pool:        db,
 		JWT:         jwtManager,
+		Permissions: permissions,
 		StudentRepo: studentRepo,
 		UserRepo:    userRepo,
 		TokenRepo:   tokenRepo,

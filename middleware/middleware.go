@@ -11,6 +11,8 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/helmet"
 	"github.com/gofiber/fiber/v2/middleware/recover"
 	"github.com/google/uuid"
+
+	"api-students/helper"
 )
 
 func Register(app *fiber.App, logger *log.Logger, allowedOrigins string) {
@@ -26,6 +28,7 @@ func corsPolicy(allowedOrigins string) fiber.Handler {
 	if strings.TrimSpace(allowedOrigins) == "" {
 		allowedOrigins = "http://localhost:5173"
 	}
+
 	return cors.New(cors.Config{
 		AllowOrigins: allowedOrigins,
 		AllowMethods: "GET,POST,PUT,PATCH,DELETE,OPTIONS",
@@ -60,12 +63,19 @@ func RequestLogger(logger *log.Logger) fiber.Handler {
 			Path      string `json:"path"`
 			Status    int    `json:"status"`
 			Duration  string `json:"duration"`
+			UserID    int    `json:"user_id,omitempty"`
+			Role      string `json:"role,omitempty"`
 		}{
 			RequestID: c.Locals("request_id").(string),
 			Method:    c.Method(),
 			Path:      c.Path(),
 			Status:    c.Response().StatusCode(),
 			Duration:  time.Since(start).String(),
+		}
+
+		if user, ok := helper.CurrentUser(c); ok {
+			entry.UserID = user.UserID
+			entry.Role = user.Role
 		}
 
 		data, errJSON := json.Marshal(entry)

@@ -11,22 +11,21 @@ import (
 )
 
 type Dependencies struct {
-	Pool        *pgxpool.Pool
-	JWT         *helper.JWTManager
-	StudentRepo *repository.StudentRepository
-	UserRepo    *repository.UserRepository
-	TokenRepo   *repository.TokenRepository
-	AuthService *service.AuthService
-	StudentService interface{} // placeholder jika ada
+	Pool           *pgxpool.Pool
+	JWT            *helper.JWTManager
+	Permissions    *helper.PermissionSet
+	StudentRepo    *repository.StudentRepository
+	UserRepo       *repository.UserRepository
+	TokenRepo      *repository.TokenRepository
+	AuthService    *service.AuthService
+	StudentService any
 }
 
 func Register(app *fiber.App, deps Dependencies) {
 	api := app.Group("/api/v1")
 
-	// --- publik ---
 	api.Get("/health", healthCheck(deps.Pool))
 
-	// --- autentikasi ---
 	auth := api.Group("/auth", middleware.RequireJSON())
 	auth.Post("/register", deps.AuthService.Register)
 	auth.Post("/login", middleware.LoginRateLimiter(), deps.AuthService.Login)
@@ -34,14 +33,13 @@ func Register(app *fiber.App, deps Dependencies) {
 	auth.Post("/logout", deps.AuthService.Logout)
 	auth.Get("/me", middleware.RequireAuth(deps.JWT), deps.AuthService.Me)
 
-	// --- students: wajib membawa access token ---
 	students := api.Group("/students", middleware.RequireJSON(), middleware.RequireAuth(deps.JWT))
-	students.Get("/", listStudents(deps.StudentRepo))
-	students.Get("/:id", getStudent(deps.StudentRepo))
-	students.Post("/", createStudent(deps.StudentRepo))
-	students.Put("/:id", replaceStudent(deps.StudentRepo))
-	students.Patch("/:id", patchStudent(deps.StudentRepo))
-	students.Delete("/:id", deleteStudent(deps.StudentRepo))
+	students.Get("/", middleware.RequirePermission(deps.Permissions, "student:list"), listStudents(deps.StudentRepo))
+	students.Get("/:id", getStudent(deps.StudentRepo, deps.Permissions))
+	students.Post("/", middleware.RequirePermission(deps.Permissions, "student:create"), createStudent(deps.StudentRepo))
+	students.Put("/:id", replaceStudent(deps.StudentRepo, deps.Permissions))
+	students.Patch("/:id", patchStudent(deps.StudentRepo, deps.Permissions))
+	students.Delete("/:id", middleware.RequirePermission(deps.Permissions, "student:delete"), deleteStudent(deps.StudentRepo))
 }
 
 func healthCheck(pool *pgxpool.Pool) fiber.Handler {
@@ -52,6 +50,7 @@ func healthCheck(pool *pgxpool.Pool) fiber.Handler {
 				"message": "database tidak tersedia",
 			})
 		}
+
 		return c.Status(fiber.StatusOK).JSON(fiber.Map{
 			"success": true,
 			"message": "service sehat",

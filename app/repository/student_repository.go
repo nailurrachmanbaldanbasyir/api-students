@@ -101,7 +101,7 @@ func (r *StudentRepository) List(
 	offsetParam := len(args)
 
 	query := fmt.Sprintf(`
-		SELECT id, nim, name, grade, is_active, created_at
+		SELECT id, nim, name, grade, is_active, owner_id, created_at
 		FROM students
 		WHERE %s
 		ORDER BY %s %s
@@ -125,6 +125,7 @@ func (r *StudentRepository) List(
 			&student.Name,
 			&student.Grade,
 			&student.IsActive,
+			&student.OwnerID,
 			&student.CreatedAt,
 		); err != nil {
 			return nil, 0, err
@@ -147,7 +148,7 @@ func (r *StudentRepository) GetByID(
 	var student model.Student
 
 	query := `
-		SELECT id, nim, name, grade, is_active, created_at
+		SELECT id, nim, name, grade, is_active, owner_id, created_at
 		FROM students
 		WHERE id = $1
 	`
@@ -158,6 +159,7 @@ func (r *StudentRepository) GetByID(
 		&student.Name,
 		&student.Grade,
 		&student.IsActive,
+		&student.OwnerID,
 		&student.CreatedAt,
 	)
 
@@ -181,10 +183,11 @@ func (r *StudentRepository) Create(
 			nim,
 			name,
 			grade,
-			is_active
+			is_active,
+			owner_id
 		)
-		VALUES ($1, $2, $3, $4)
-		RETURNING id, nim, name, grade, is_active, created_at
+		VALUES ($1, $2, $3, $4, $5)
+		RETURNING id, nim, name, grade, is_active, owner_id, created_at
 	`
 
 	var result model.Student
@@ -196,12 +199,14 @@ func (r *StudentRepository) Create(
 		student.Name,
 		student.Grade,
 		student.IsActive,
+		student.OwnerID,
 	).Scan(
 		&result.ID,
 		&result.NIM,
 		&result.Name,
 		&result.Grade,
 		&result.IsActive,
+		&result.OwnerID,
 		&result.CreatedAt,
 	)
 
@@ -231,7 +236,7 @@ func (r *StudentRepository) Update(
 			grade = $3,
 			is_active = $4
 		WHERE id = $5
-		RETURNING id, nim, name, grade, is_active, created_at
+		RETURNING id, nim, name, grade, is_active, owner_id, created_at
 	`
 
 	var result model.Student
@@ -250,6 +255,7 @@ func (r *StudentRepository) Update(
 		&result.Name,
 		&result.Grade,
 		&result.IsActive,
+		&result.OwnerID,
 		&result.CreatedAt,
 	)
 
@@ -307,7 +313,7 @@ func (r *StudentRepository) Patch(
 		UPDATE students
 		SET %s
 		WHERE id = $%d
-		RETURNING id, nim, name, grade, is_active, created_at
+		RETURNING id, nim, name, grade, is_active, owner_id, created_at
 	`, strings.Join(setParts, ", "), len(args))
 
 	var result model.Student
@@ -318,6 +324,7 @@ func (r *StudentRepository) Patch(
 		&result.Name,
 		&result.Grade,
 		&result.IsActive,
+		&result.OwnerID,
 		&result.CreatedAt,
 	)
 
