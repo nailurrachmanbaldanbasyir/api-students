@@ -62,3 +62,12 @@ func FailValidation(c *fiber.Ctx, errs map[string]string) error {
 		Errors:  errs,
 	})
 }
+
+// Alias agar kompatibel dengan penamaan di modul
+func Success(c *fiber.Ctx, status int, message string, data any) error {
+	return c.Status(status).JSON(WebResponse{
+		Success: true,
+		Message: message,
+		Data:    data,
+	})
+}
