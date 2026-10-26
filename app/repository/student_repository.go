@@ -37,12 +37,61 @@ type ListParams struct {
 	IsActive *bool
 }
 
+const studentColumns = "id, nim, name, grade, is_active, owner_id, created_at"
+
 var allowedSort = map[string]string{
 	"id":        "id",
 	"nim":       "nim",
 	"name":      "name",
 	"grade":     "grade",
 	"is_active": "is_active",
+}
+
+func scanStudent(row interface{ Scan(dest ...any) error }) (model.Student, error) {
+	var s model.Student
+	err := row.Scan(&s.ID, &s.NIM, &s.Name, &s.Grade, &s.IsActive, &s.OwnerID, &s.CreatedAt)
+	return s, err
+}
+
+func (r *StudentRepository) FindAfterCursor(
+	ctx context.Context,
+	q model.CursorQuery,
+) ([]model.Student, error) {
+	args := []any{}
+	where := " WHERE 1=1"
+	if q.Search != "" {
+		args = append(args, "%"+q.Search+"%")
+		where += fmt.Sprintf(" AND (name ILIKE $%d OR nim ILIKE $%d)", len(args), len(args))
+	}
+	if q.IsActive != nil {
+		args = append(args, *q.IsActive)
+		where += fmt.Sprintf(" AND is_active = $%d", len(args))
+	}
+	if q.After != nil {
+		args = append(args, q.After.CreatedAt, q.After.ID)
+		where += fmt.Sprintf(" AND (created_at, id) < ($%d, $%d)", len(args)-1, len(args))
+	}
+	args = append(args, q.Limit+1)
+	query := fmt.Sprintf(
+		"SELECT %s FROM students%s ORDER BY created_at DESC, id DESC LIMIT $%d",
+		studentColumns, where, len(args))
+	rows, err := r.db.Query(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("mengambil daftar student: %w", err)
+	}
+	defer rows.Close()
+	result := []model.Student{}
+	for rows.Next() {
+		s, err := scanStudent(rows)
+		if err != nil {
+			return nil, fmt.Errorf("membaca row student: %w", err)
+		}
+		result = append(result, s)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("membaca hasil query: %w", err)
+	}
+	return result, nil
 }
 
 func (r *StudentRepository) List(

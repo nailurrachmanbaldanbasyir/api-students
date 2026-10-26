@@ -11,3 +11,5 @@ type User struct {
 	IsActive  bool      `json:"is_active"`
 	CreatedAt time.Time `json:"created_at"`
 }
+
+// ErrorResponse dipindah ke student.go (shared), keep alias untuk kompatibilitas

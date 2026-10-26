@@ -1,3 +1,4 @@
+
 package route
 
 import (
@@ -11,14 +12,15 @@ import (
 )
 
 type Dependencies struct {
-	Pool           *pgxpool.Pool
-	JWT            *helper.JWTManager
-	Permissions    *helper.PermissionSet
-	StudentRepo    *repository.StudentRepository
-	UserRepo       *repository.UserRepository
-	TokenRepo      *repository.TokenRepository
-	AuthService    *service.AuthService
-	StudentService any
+	Pool             *pgxpool.Pool
+	JWT              *helper.JWTManager
+	Permissions      *helper.PermissionSet
+	StudentRepo      *repository.StudentRepository
+	UserRepo         *repository.UserRepository
+	TokenRepo        *repository.TokenRepository
+	AuthService      *service.AuthService
+	StudentService   any
+	PortfolioService *service.PortfolioService
 }
 
 func Register(app *fiber.App, deps Dependencies) {
@@ -33,13 +35,46 @@ func Register(app *fiber.App, deps Dependencies) {
 	auth.Post("/logout", deps.AuthService.Logout)
 	auth.Get("/me", middleware.RequireAuth(deps.JWT), deps.AuthService.Me)
 
-	students := api.Group("/students", middleware.RequireJSON(), middleware.RequireAuth(deps.JWT))
-	students.Get("/", middleware.RequirePermission(deps.Permissions, "student:list"), listStudents(deps.StudentRepo))
+	students := api.Group(
+		"/students",
+		middleware.RequireJSON(),
+		middleware.RequireAuth(deps.JWT),
+	)
+
+	students.Get(
+		"/",
+		middleware.RequirePermission(deps.Permissions, "student:list"),
+		listStudents(deps.StudentRepo),
+	)
 	students.Get("/:id", getStudent(deps.StudentRepo, deps.Permissions))
-	students.Post("/", middleware.RequirePermission(deps.Permissions, "student:create"), createStudent(deps.StudentRepo))
+	students.Post(
+		"/",
+		middleware.RequirePermission(deps.Permissions, "student:create"),
+		createStudent(deps.StudentRepo),
+	)
 	students.Put("/:id", replaceStudent(deps.StudentRepo, deps.Permissions))
 	students.Patch("/:id", patchStudent(deps.StudentRepo, deps.Permissions))
-	students.Delete("/:id", middleware.RequirePermission(deps.Permissions, "student:delete"), deleteStudent(deps.StudentRepo))
+	students.Delete(
+		"/:id",
+		middleware.RequirePermission(deps.Permissions, "student:delete"),
+		deleteStudent(deps.StudentRepo),
+	)
+
+	// Portfolio mahasiswa
+	students.Get("/:id/portfolio", deps.PortfolioService.Get)
+	students.Put("/:id/portfolio", deps.PortfolioService.Put)
+	students.Post("/:id/portfolio/projects", deps.PortfolioService.AddProject)
+	students.Delete(
+		"/:id/portfolio/projects/:projectId",
+		deps.PortfolioService.DeleteProject,
+	)
+
+	// Statistik teknologi portfolio
+	api.Get(
+		"/portfolios/stats/technologies",
+		middleware.RequireAuth(deps.JWT),
+		deps.PortfolioService.TechnologyStats,
+	)
 }
 
 func healthCheck(pool *pgxpool.Pool) fiber.Handler {

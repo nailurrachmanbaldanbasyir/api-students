@@ -71,3 +71,21 @@ func Success(c *fiber.Ctx, status int, message string, data any) error {
 		Data:    data,
 	})
 }
+
+func ParamID(c *fiber.Ctx) (int, bool) {
+	idStr := c.Params("id")
+	if idStr == "" {
+		return 0, false
+	}
+	var id int
+	for _, ch := range idStr {
+		if ch < '0' || ch > '9' {
+			return 0, false
+		}
+		id = id*10 + int(ch-'0')
+	}
+	if id <= 0 {
+		return 0, false
+	}
+	return id, true
+}

@@ -1,8 +1,11 @@
+
 package middleware
 
 import (
 	"encoding/json"
+	"errors"
 	"log"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -28,7 +31,6 @@ func corsPolicy(allowedOrigins string) fiber.Handler {
 	if strings.TrimSpace(allowedOrigins) == "" {
 		allowedOrigins = "http://localhost:5173"
 	}
-
 	return cors.New(cors.Config{
 		AllowOrigins: allowedOrigins,
 		AllowMethods: "GET,POST,PUT,PATCH,DELETE,OPTIONS",
@@ -39,14 +41,11 @@ func corsPolicy(allowedOrigins string) fiber.Handler {
 func RequestID() fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		requestID := c.Get("X-Request-ID")
-
 		if requestID == "" {
 			requestID = uuid.New().String()
 		}
-
 		c.Set("X-Request-ID", requestID)
 		c.Locals("request_id", requestID)
-
 		return c.Next()
 	}
 }
@@ -54,8 +53,34 @@ func RequestID() fiber.Handler {
 func RequestLogger(logger *log.Logger) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		start := time.Now()
-
 		err := c.Next()
+		requestID, _ := c.Locals("request_id").(string)
+		status := c.Response().StatusCode()
+
+		if err != nil {
+			var appErr *helper.AppError
+			if errors.As(err, &appErr) {
+				status = appErr.Status
+			} else {
+				status = fiber.StatusInternalServerError
+			}
+		}
+
+		attrs := []any{
+			slog.String("request_id", requestID),
+			slog.String("method", c.Method()),
+			slog.String("path", c.Path()),
+			slog.Int("status", status),
+			slog.Duration("duration", time.Since(start)),
+			slog.String("ip", c.IP()),
+		}
+		if user, ok := helper.CurrentUser(c); ok {
+			attrs = append(attrs,
+				slog.Int("user_id", user.UserID),
+				slog.String("role", user.Role),
+			)
+		}
+		_ = attrs
 
 		entry := struct {
 			RequestID string `json:"request_id"`
@@ -66,13 +91,12 @@ func RequestLogger(logger *log.Logger) fiber.Handler {
 			UserID    int    `json:"user_id,omitempty"`
 			Role      string `json:"role,omitempty"`
 		}{
-			RequestID: c.Locals("request_id").(string),
+			RequestID: requestID,
 			Method:    c.Method(),
 			Path:      c.Path(),
-			Status:    c.Response().StatusCode(),
+			Status:    status,
 			Duration:  time.Since(start).String(),
 		}
-
 		if user, ok := helper.CurrentUser(c); ok {
 			entry.UserID = user.UserID
 			entry.Role = user.Role
@@ -82,7 +106,6 @@ func RequestLogger(logger *log.Logger) fiber.Handler {
 		if errJSON == nil {
 			logger.Println(string(data))
 		}
-
 		return err
 	}
 }
@@ -92,18 +115,13 @@ func RequireJSON() fiber.Handler {
 		switch c.Method() {
 		case fiber.MethodPost, fiber.MethodPut, fiber.MethodPatch:
 			contentType := c.Get("Content-Type")
-
-			if contentType == "" || !strings.HasPrefix(
-				strings.ToLower(contentType),
-				"application/json",
-			) {
-				return c.Status(fiber.StatusUnsupportedMediaType).JSON(fiber.Map{
-					"success": false,
-					"message": "Content-Type harus application/json",
-				})
+			if contentType == "" ||
+				!strings.HasPrefix(strings.ToLower(contentType), "application/json") {
+				return helper.UnsupportedMediaType(
+					"Content-Type harus application/json",
+				)
 			}
 		}
-
 		return c.Next()
 	}
 }

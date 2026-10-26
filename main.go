@@ -35,11 +35,39 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Koneksi PostgreSQL
 	db, err := database.NewPostgresPool()
 	if err != nil {
 		logger.Fatal(err)
 	}
 	defer db.Close()
+
+	// Koneksi MongoDB
+	mongoCtx, mongoCancel := context.WithTimeout(
+		context.Background(),
+		10*time.Second,
+	)
+	mongoClient, err := database.NewMongoClient(mongoCtx)
+	mongoCancel()
+
+	if err != nil {
+		logger.Fatalf("gagal terhubung ke MongoDB: %v", err)
+	}
+	defer func() {
+		ctx, cancel := context.WithTimeout(
+			context.Background(),
+			5*time.Second,
+		)
+		defer cancel()
+
+		if err := mongoClient.Disconnect(ctx); err != nil {
+			logger.Printf("gagal menutup koneksi MongoDB: %v", err)
+		}
+	}()
+
+	mongoDB := mongoClient.Database(
+		config.GetEnvWithDefault("MONGO_DATABASE", "api_students"),
+	)
 
 	jwtManager := helper.NewJWTManager(
 		jwtSecret,
@@ -53,6 +81,20 @@ func main() {
 	roleRepo := repository.NewRoleRepository(db)
 	studentRepo := repository.NewStudentRepository(db)
 
+	// Repository portfolio MongoDB
+	portfolioRepo := repository.NewPortfolioRepository(mongoDB)
+
+	// Pastikan index student_id unik tersedia
+	indexCtx, indexCancel := context.WithTimeout(
+		context.Background(),
+		10*time.Second,
+	)
+	err = portfolioRepo.EnsureIndexes(indexCtx)
+	indexCancel()
+	if err != nil {
+		logger.Fatalf("gagal menyiapkan index portfolio: %v", err)
+	}
+
 	rawPermissions, err := roleRepo.LoadPermissions(context.Background())
 	if err != nil {
 		logger.Printf("gagal memuat permission: %v", err)
@@ -62,16 +104,28 @@ func main() {
 	permissions := helper.NewPermissionSet(rawPermissions)
 	logger.Printf("permission dimuat, roles=%v", permissions.KnownRoles())
 
-	authService := service.NewAuthService(userRepo, tokenRepo, jwtManager, permissions, refreshTTL)
+	authService := service.NewAuthService(
+		userRepo,
+		tokenRepo,
+		jwtManager,
+		permissions,
+		refreshTTL,
+	)
+
+	portfolioService := service.NewPortfolioService(
+		studentRepo,
+		portfolioRepo,
+	)
 
 	app := config.NewApp(logger, db, route.Dependencies{
-		Pool:        db,
-		JWT:         jwtManager,
-		Permissions: permissions,
-		StudentRepo: studentRepo,
-		UserRepo:    userRepo,
-		TokenRepo:   tokenRepo,
-		AuthService: authService,
+		Pool:             db,
+		JWT:              jwtManager,
+		Permissions:      permissions,
+		StudentRepo:      studentRepo,
+		UserRepo:         userRepo,
+		TokenRepo:        tokenRepo,
+		AuthService:      authService,
+		PortfolioService: portfolioService,
 	})
 
 	logger.Println("server berjalan pada port 3000")

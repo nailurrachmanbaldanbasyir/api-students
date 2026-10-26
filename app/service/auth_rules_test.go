@@ -46,11 +46,13 @@ func TestValidateLogin_Kosong(t *testing.T) {
 	}
 }
 
-func TestIsValidUsername(t *testing.T) {
-	if !isValidUsername("sari_123.test") {
-		t.Error("expected valid username")
+func TestUsername_ValidAndInvalid(t *testing.T) {
+	valid := model.RegisterRequest{Username: "sari_123.test", Email: "valid@example.com", Password: "rahasia123"}
+	if errs := ValidateRegister(valid); len(errs) != 0 {
+		t.Fatalf("expected valid username to pass, got %v", errs)
 	}
-	if isValidUsername("sari@test!") {
-		t.Error("expected invalid username")
+	invalid := model.RegisterRequest{Username: "sari@test!", Email: "valid@example.com", Password: "rahasia123"}
+	if errs := ValidateRegister(invalid); errs["username"] == "" {
+		t.Error("expected invalid username to fail")
 	}
 }
